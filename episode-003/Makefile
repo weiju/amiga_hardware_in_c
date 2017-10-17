@@ -1,0 +1,18 @@
+CC = vc +kick13
+CFLAGS=  -I$(NDK_INC) -c99 -O2 -I../include
+LDFLAGS=-lamiga -lauto
+
+.PHONY : clean check
+.SUFFIXES : .o .c
+
+all: playfield
+
+clean:
+	rm -f *.o playfield
+
+.c.o:
+	$(CC) $(CFLAGS) $^ -c -o $@
+
+playfield: playfield.o
+	$(CC) $^ $(LDFLAGS) -o $@
+

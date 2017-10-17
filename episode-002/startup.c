@@ -19,12 +19,22 @@
 extern struct GfxBase *GfxBase;
 extern struct Custom custom;
 
-static UWORD __chip coplist[] = {
+static UWORD __chip coplist_pal[] = {
     COP_MOVE(BPLCON0, BPLCON0_COMPOSITE_COLOR),
     COP_MOVE(COLOR00, 0x000),
-    0x8107, 0xfffe,            // wait for $8107,$fffe
+    0x7c07, 0xfffe,            // wait for 1/3 (0x07, 0x7c)
     COP_MOVE(COLOR00, 0xf00),
-    0xd607, 0xfffe,            // wait for $d607,$fffe
+    0xda07, 0xfffe,            // wait for 2/3 (0x07, 0xda)
+    COP_MOVE(COLOR00, 0xff0),
+    COP_WAIT_END
+};
+
+static UWORD __chip coplist_ntsc[] = {
+    COP_MOVE(BPLCON0, BPLCON0_COMPOSITE_COLOR),
+    COP_MOVE(COLOR00, 0x000),
+    0x6607, 0xfffe,
+    COP_MOVE(COLOR00, 0xf00),
+    0xb607, 0xfffe,
     COP_MOVE(COLOR00, 0xff0),
     COP_WAIT_END
 };
@@ -57,10 +67,7 @@ int main(int argc, char **argv)
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
     printf("PAL display: %d\n", is_pal);
-    custom.cop1lc = (ULONG) coplist;
-
-    // strobe the COPJMP1 register to force using copper list 1
-    //custom.copjmp1 = 1;
+    custom.cop1lc = (ULONG) (is_pal ? coplist_pal : coplist_ntsc);
     waitmouse();  // replace with logic
     reset_display();
     return 0;
