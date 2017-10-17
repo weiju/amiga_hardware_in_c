@@ -20,6 +20,8 @@
 #define NUM_BITPLANES    (5)
 #define BPL_MODULO ((NUM_BITPLANES - 1) * SCREEN_ROW_BYTES)
 
+#define PAL_IMAGE_SIZE   (SCREEN_ROW_BYTES * 256)
+
 // playfield control
 // bplcon0: use bitplane 1-5 = BPU 101, composite color enable
 // bplcon1: horizontal scroll value = 0 for all playfields
@@ -113,10 +115,16 @@ static ULONG read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet)
     FILE *fp = fopen(filename, "rb");
 
     if (fp) {
-        int num_img_bytes;
+        int num_img_bytes, imgdata_size = PAL_IMAGE_SIZE;
         elems_read = fread(&sheet->header, sizeof(struct Ratr0TileSheetHeader), 1, fp);
         elems_read = fread(&sheet->palette, sizeof(unsigned char), 3 * sheet->header.palette_size, fp);
-        sheet->imgdata = AllocMem(sheet->header.imgdata_size, MEMF_CHIP|MEMF_CLEAR);
+        // reserve enough data to fill the entire display window
+        // if we have only an NTSC sized image, but a PAL display, we might get
+        // artifacts
+        if (sheet->header.imgdata_size > imgdata_size) {
+            imgdata_size = sheet->header.imgdata_size;
+        }
+        sheet->imgdata = AllocMem(imgdata_size, MEMF_CHIP|MEMF_CLEAR);
         elems_read = fread(sheet->imgdata, sizeof(unsigned char), sheet->header.imgdata_size, fp);
         fclose(fp);
     } else {
