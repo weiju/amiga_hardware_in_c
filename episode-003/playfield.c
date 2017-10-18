@@ -42,14 +42,14 @@ struct Ratr0TileSheetHeader {
     ULONG imgdata_size;
 };
 
-# define MAX_PALETTE_SIZE (32 * 3)
+#define MAX_PALETTE_SIZE 32
 struct Ratr0TileSheet {
     struct Ratr0TileSheetHeader header;
-    UBYTE palette[MAX_PALETTE_SIZE];
+    UWORD palette[MAX_PALETTE_SIZE];
     UBYTE *imgdata;
 };
 
-#define IMG_FILE_NAME "gorilla.tiles"
+#define IMG_FILE_NAME "gorilla-interleaved.img"
 
 // 20 instead of 127 because of input.device priority
 #define TASK_PRIORITY           (20)
@@ -115,9 +115,11 @@ static ULONG read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet)
     FILE *fp = fopen(filename, "rb");
 
     if (fp) {
-        int num_img_bytes, imgdata_size = PAL_IMAGE_SIZE;
+        int num_img_bytes, imgdata_size = PAL_IMAGE_SIZE, total_bytes = 0;
         elems_read = fread(&sheet->header, sizeof(struct Ratr0TileSheetHeader), 1, fp);
-        elems_read = fread(&sheet->palette, sizeof(unsigned char), 3 * sheet->header.palette_size, fp);
+        total_bytes += elems_read * sizeof(struct Ratr0TileSheetHeader);
+        elems_read = fread(&sheet->palette, sizeof(UWORD), sheet->header.palette_size, fp);
+        total_bytes += elems_read * sizeof(UWORD);
         // reserve enough data to fill the entire display window
         // if we have only an NTSC sized image, but a PAL display, we might get
         // artifacts
@@ -126,6 +128,7 @@ static ULONG read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet)
         }
         sheet->imgdata = AllocMem(imgdata_size, MEMF_CHIP|MEMF_CLEAR);
         elems_read = fread(sheet->imgdata, sizeof(unsigned char), sheet->header.imgdata_size, fp);
+        total_bytes += elems_read;
         fclose(fp);
     } else {
         printf("ratr0_read_tilesheet() error: file '%s' not found\n", filename);
@@ -177,14 +180,8 @@ int main(int argc, char **argv)
         UBYTE num_colors = 1 << image.header.bmdepth;
 
         // 1. copy the palette to the copper list
-        // TODO: maybe we should already encode the color entries
-        // in 12 bit format through the tool
-        UWORD color_triple = 0;
-        for (int i = 0, j = 0; i < num_colors; i++, j += 3) {
-            UWORD color_triple = (((image.palette[j] >> 4) & 0x0f) << 8) |
-                (((image.palette[j + 1] >> 4) & 0x0f) << 4) |
-                ((image.palette[j + 2] >> 4) & 0x0f);
-            coplist[COPLIST_IDX_COLOR00_VALUE + (i << 1)] = color_triple;
+        for (int i = 0; i < num_colors; i++) {
+            coplist[COPLIST_IDX_COLOR00_VALUE + (i << 1)] = image.palette[i];
         }
         // 2. prepare bitplanes and point the copper list entries
         // to the bitplanes (we already initialized the modulos statically)
