@@ -33,13 +33,13 @@
 
 struct Ratr0TileSheetHeader {
     UBYTE id[FILE_ID_LEN];
-    UBYTE flags, bmdepth;
+    UBYTE version, flags, reserved1, bmdepth;
     UWORD width, height;
     UWORD tile_width, tile_height;
     UWORD num_tiles_h, num_tiles_v;
-    ULONG checksum;
-    UWORD palette_size;
+    UWORD palette_size, reserved2;
     ULONG imgdata_size;
+    ULONG checksum;
 };
 
 #define MAX_PALETTE_SIZE 32
