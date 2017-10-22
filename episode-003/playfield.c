@@ -6,6 +6,8 @@
 #include <graphics/gfxbase.h>
 #include <ahpc_registers.h>
 
+#include "tilesheet.h"
+
 // Data fetch
 #define DDFSTRT_VALUE      0x0038
 #define DDFSTOP_VALUE      0x00d0
@@ -19,7 +21,6 @@
 #define SCREEN_ROW_BYTES (SCREEN_WIDTH / 8)
 #define NUM_BITPLANES    (5)
 #define BPL_MODULO ((NUM_BITPLANES - 1) * SCREEN_ROW_BYTES)
-
 #define PAL_IMAGE_SIZE   (SCREEN_ROW_BYTES * 256)
 
 // playfield control
@@ -27,27 +28,6 @@
 // bplcon1: horizontal scroll value = 0 for all playfields
 #define BPLCON0_VALUE (0x5200)
 #define BPLCON1_VALUE (0)
-
-// information about a tile sheet
-#define FILE_ID_LEN (8)
-
-struct Ratr0TileSheetHeader {
-    UBYTE id[FILE_ID_LEN];
-    UBYTE version, flags, reserved1, bmdepth;
-    UWORD width, height;
-    UWORD tile_width, tile_height;
-    UWORD num_tiles_h, num_tiles_v;
-    UWORD palette_size, reserved2;
-    ULONG imgdata_size;
-    ULONG checksum;
-};
-
-#define MAX_PALETTE_SIZE 32
-struct Ratr0TileSheet {
-    struct Ratr0TileSheetHeader header;
-    UWORD palette[MAX_PALETTE_SIZE];
-    UBYTE *imgdata;
-};
 
 #define IMG_FILE_NAME "gorilla-interleaved.img"
 
@@ -109,38 +89,6 @@ static UWORD __chip coplist[] = {
     COP_WAIT_END
 };
 
-static ULONG read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet)
-{
-    int elems_read;
-    FILE *fp = fopen(filename, "rb");
-
-    if (fp) {
-        int num_img_bytes, imgdata_size = PAL_IMAGE_SIZE, total_bytes = 0;
-        elems_read = fread(&sheet->header, sizeof(struct Ratr0TileSheetHeader), 1, fp);
-        total_bytes += elems_read * sizeof(struct Ratr0TileSheetHeader);
-        elems_read = fread(&sheet->palette, sizeof(UWORD), sheet->header.palette_size, fp);
-        total_bytes += elems_read * sizeof(UWORD);
-        // reserve enough data to fill the entire display window
-        // if we have only an NTSC sized image, but a PAL display, we might get
-        // artifacts
-        if (sheet->header.imgdata_size > imgdata_size) {
-            imgdata_size = sheet->header.imgdata_size;
-        }
-        sheet->imgdata = AllocMem(imgdata_size, MEMF_CHIP|MEMF_CLEAR);
-        elems_read = fread(sheet->imgdata, sizeof(unsigned char), sheet->header.imgdata_size, fp);
-        total_bytes += elems_read;
-        fclose(fp);
-    } else {
-        printf("ratr0_read_tilesheet() error: file '%s' not found\n", filename);
-        return 0;
-    }
-    return elems_read;
-}
-
-static void free_tilesheet_data(struct Ratr0TileSheet *sheet)
-{
-    if (sheet && sheet->imgdata) FreeMem(sheet->imgdata, sheet->header.imgdata_size);
-}
 
 static BOOL init_display(void)
 {
@@ -171,7 +119,7 @@ int main(int argc, char **argv)
 {
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
-    if (read_tilesheet(IMG_FILE_NAME, &image)) {
+    if (read_tilesheet(IMG_FILE_NAME, &image, PAL_IMAGE_SIZE)) {
         if (is_pal) {
             coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
         } else {
@@ -193,10 +141,15 @@ int main(int argc, char **argv)
             coplist_idx += 4; // next bitplane
         }
 
-        // 3. initialize the copper list
+        // 3. disable sprite DMA and initialize the copper list
+        custom.dmacon  = 0x0020;
         custom.cop1lc = (ULONG) coplist;
         waitmouse();
-        free_tilesheet_data(&image);
+        if (image.header.imgdata_size < PAL_IMAGE_SIZE) {
+            free_tilesheet_data(&image, PAL_IMAGE_SIZE);
+        } else {
+            free_tilesheet_data(&image, image.header.imgdata_size);
+        }
     }
     reset_display();
     return 0;

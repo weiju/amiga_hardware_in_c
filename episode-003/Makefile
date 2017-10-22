@@ -13,6 +13,6 @@ clean:
 .c.o:
 	$(CC) $(CFLAGS) $^ -c -o $@
 
-playfield: playfield.o
+playfield: playfield.o tilesheet.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
