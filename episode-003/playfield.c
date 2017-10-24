@@ -19,19 +19,27 @@
 #define DISPLAY_HEIGHT   (200)
 #define SCREEN_WIDTH     (320)
 #define SCREEN_ROW_BYTES (SCREEN_WIDTH / 8)
-#define NUM_BITPLANES    (5)
-#define BPL_MODULO ((NUM_BITPLANES - 1) * SCREEN_ROW_BYTES)
+#define PAL_PLANE_SIZE   (SCREEN_ROW_BYTES * 256)
+#define NTSC_PLANE_SIZE   (SCREEN_ROW_BYTES * 200)
 
-#define PAL_IMAGE_SIZE   (SCREEN_ROW_BYTES * 256)
-#define NTSC_IMAGE_SIZE   (SCREEN_ROW_BYTES * 200)
+#define NUM_BITPLANES    (5)
+
+#ifdef INTERLEAVED
+#define BPL_MODULO ((NUM_BITPLANES - 1) * SCREEN_ROW_BYTES)
+#define IMG_FILE_NAME "gorilla-interleaved.img"
+#else
+#define BPL_MODULO (0)
+#define IMG_FILE_NAME "gorilla-noninterleaved.img"
+#endif
+
+#define PAL_IMAGE_SIZE   ((SCREEN_ROW_BYTES * 256) * NUM_BITPLANES )
+#define NTSC_IMAGE_SIZE   ((SCREEN_ROW_BYTES * 200) * NUM_BITPLANES)
 
 // playfield control
 // bplcon0: use bitplane 1-5 = BPU 101, composite color enable
 // bplcon1: horizontal scroll value = 0 for all playfields
 #define BPLCON0_VALUE (0x5200)
 #define BPLCON1_VALUE (0)
-
-#define IMG_FILE_NAME "gorilla-interleaved.img"
 
 // 20 instead of 127 because of input.device priority
 #define TASK_PRIORITY           (20)
@@ -137,7 +145,11 @@ int main(int argc, char **argv)
         // to the bitplanes (we already initialized the modulos statically)
         int coplist_idx = COPLIST_IDX_BPL1PTH_VALUE;
         for (int i = 0; i < image.header.bmdepth; i++) {
+#ifdef INTERLEAVED
             ULONG addr = (ULONG) &(image.imgdata[i * SCREEN_ROW_BYTES]);
+#else
+            ULONG addr = (ULONG) &(image.imgdata[i * NTSC_PLANE_SIZE]);
+#endif
             coplist[coplist_idx] = (addr >> 16) & 0xffff;
             coplist[coplist_idx + 2] = addr & 0xffff;
             coplist_idx += 4; // next bitplane
