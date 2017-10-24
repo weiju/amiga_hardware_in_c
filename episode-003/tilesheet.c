@@ -3,14 +3,22 @@
 #include "tilesheet.h"
 
 
-ULONG read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
-                     int min_imagedata_size)
+/**
+ * Reads the image information from specified RATR0 tile sheet file.
+ *
+ * @param filename path to the tile sheet file
+ * @param sheet pointer to a Ratr0TileSheet structure
+ * @param min_imgdata_size the minimum size to reserve for the imagedata
+ *        element
+ */
+ULONG ratr0_read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
+                           int min_imgdata_size)
 {
     int elems_read;
     FILE *fp = fopen(filename, "rb");
 
     if (fp) {
-        int num_img_bytes, imgdata_size = min_imagedata_size, total_bytes = 0;
+        int num_img_bytes, total_bytes = 0;
         elems_read = fread(&sheet->header, sizeof(struct Ratr0TileSheetHeader), 1, fp);
         total_bytes += elems_read * sizeof(struct Ratr0TileSheetHeader);
         elems_read = fread(&sheet->palette, sizeof(UWORD), sheet->header.palette_size, fp);
@@ -18,10 +26,9 @@ ULONG read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
         // reserve enough data to fill the entire display window
         // if we have only an NTSC sized image, but a PAL display, we might get
         // artifacts
-        if (sheet->header.imgdata_size > imgdata_size) {
-            imgdata_size = sheet->header.imgdata_size;
-        }
-        sheet->imgdata = AllocMem(imgdata_size, MEMF_CHIP|MEMF_CLEAR);
+        sheet->imgdata_size = (sheet->header.imgdata_size > min_imgdata_size) ?
+            sheet->header.imgdata_size : min_imgdata_size;
+        sheet->imgdata = AllocMem(sheet->imgdata_size, MEMF_CHIP|MEMF_CLEAR);
         elems_read = fread(sheet->imgdata, sizeof(unsigned char), sheet->header.imgdata_size, fp);
         total_bytes += elems_read;
         fclose(fp);
@@ -32,11 +39,10 @@ ULONG read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
     return elems_read;
 }
 
-void free_tilesheet_data(struct Ratr0TileSheet *sheet, int imgdata_size)
+/**
+ * Frees the memory that was allocated for the specified RATR0 tile sheet.
+ */
+void ratr0_free_tilesheet_data(struct Ratr0TileSheet *sheet)
 {
-    // Since the AllocMem()/FreeMem() pair needs an explicit specification
-    // of the allocated/freed memory block size, we need to pass that size
-    // as well to avoid a memory leak in the case that the image size is
-    // smaller than the display size (e.g. on PAL)
-    if (sheet && sheet->imgdata) FreeMem(sheet->imgdata, imgdata_size);
+    if (sheet && sheet->imgdata) FreeMem(sheet->imgdata, sheet->imgdata_size);
 }

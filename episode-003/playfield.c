@@ -21,7 +21,9 @@
 #define SCREEN_ROW_BYTES (SCREEN_WIDTH / 8)
 #define NUM_BITPLANES    (5)
 #define BPL_MODULO ((NUM_BITPLANES - 1) * SCREEN_ROW_BYTES)
+
 #define PAL_IMAGE_SIZE   (SCREEN_ROW_BYTES * 256)
+#define NTSC_IMAGE_SIZE   (SCREEN_ROW_BYTES * 200)
 
 // playfield control
 // bplcon0: use bitplane 1-5 = BPU 101, composite color enable
@@ -119,7 +121,7 @@ int main(int argc, char **argv)
 {
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
-    if (read_tilesheet(IMG_FILE_NAME, &image, PAL_IMAGE_SIZE)) {
+    if (ratr0_read_tilesheet(IMG_FILE_NAME, &image, PAL_IMAGE_SIZE)) {
         if (is_pal) {
             coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
         } else {
@@ -145,11 +147,7 @@ int main(int argc, char **argv)
         custom.dmacon  = 0x0020;
         custom.cop1lc = (ULONG) coplist;
         waitmouse();
-        if (image.header.imgdata_size < PAL_IMAGE_SIZE) {
-            free_tilesheet_data(&image, PAL_IMAGE_SIZE);
-        } else {
-            free_tilesheet_data(&image, image.header.imgdata_size);
-        }
+        ratr0_free_tilesheet_data(&image);
     }
     reset_display();
     return 0;

@@ -17,9 +17,13 @@ struct Ratr0TileSheet {
     struct Ratr0TileSheetHeader header;
     UWORD palette[MAX_PALETTE_SIZE];
     UBYTE *imgdata;
+
+    // Since the AllocMem()/FreeMem() pair needs explicit information
+    // about the allocated/freed memory block size, we remember what we
+    // actually allocated in this element
+    ULONG imgdata_size;
 };
 
-extern ULONG read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
-                            int min_imagedata_size);
-extern void free_tilesheet_data(struct Ratr0TileSheet *sheet, int imgdata_size);
-
+extern ULONG ratr0_read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
+                                  int min_imagedata_size);
+extern void ratr0_free_tilesheet_data(struct Ratr0TileSheet *sheet);
