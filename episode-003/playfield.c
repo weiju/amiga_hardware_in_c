@@ -8,6 +8,14 @@
 
 #include "tilesheet.h"
 
+extern struct GfxBase *GfxBase;
+extern struct Custom custom;
+
+// 20 instead of 127 because of input.device priority
+#define TASK_PRIORITY           (20)
+#define PRA_FIR0_BIT            (1 << 6)
+
+
 // Data fetch
 #define DDFSTRT_VALUE      0x0038
 #define DDFSTOP_VALUE      0x00d0
@@ -15,35 +23,29 @@
 #define DIWSTOP_VALUE_PAL  0x2cc1
 #define DIWSTOP_VALUE_NTSC 0xf4c1
 
+// Display dimensions and data size
 #define DISPLAY_WIDTH    (320)
 #define DISPLAY_HEIGHT   (200)
-#define SCREEN_WIDTH     (320)
-#define SCREEN_ROW_BYTES (SCREEN_WIDTH / 8)
-#define PAL_PLANE_SIZE   (SCREEN_ROW_BYTES * 256)
-#define NTSC_PLANE_SIZE   (SCREEN_ROW_BYTES * 200)
-
+#define DISPLAY_ROW_BYTES (DISPLAY_WIDTH / 8)
+#define PAL_PLANE_SIZE   (DISPLAY_ROW_BYTES * 256)
+#define NTSC_PLANE_SIZE   (DISPLAY_ROW_BYTES * 200)
 #define NUM_BITPLANES    (5)
+#define PAL_DISPLAY_SIZE   ((DISPLAY_ROW_BYTES * 256) * NUM_BITPLANES )
+#define NTSC_DISPLAY_SIZE   ((DISPLAY_ROW_BYTES * 200) * NUM_BITPLANES)
 
 #ifdef INTERLEAVED
-#define BPL_MODULO ((NUM_BITPLANES - 1) * SCREEN_ROW_BYTES)
+#define BPL_MODULO ((NUM_BITPLANES - 1) * DISPLAY_ROW_BYTES)
 #define IMG_FILE_NAME "gorilla-interleaved.img"
 #else
 #define BPL_MODULO (0)
 #define IMG_FILE_NAME "gorilla-noninterleaved.img"
 #endif
 
-#define PAL_IMAGE_SIZE   ((SCREEN_ROW_BYTES * 256) * NUM_BITPLANES )
-#define NTSC_IMAGE_SIZE   ((SCREEN_ROW_BYTES * 200) * NUM_BITPLANES)
-
 // playfield control
 // bplcon0: use bitplane 1-5 = BPU 101, composite color enable
 // bplcon1: horizontal scroll value = 0 for all playfields
 #define BPLCON0_VALUE (0x5200)
 #define BPLCON1_VALUE (0)
-
-// 20 instead of 127 because of input.device priority
-#define TASK_PRIORITY           (20)
-#define PRA_FIR0_BIT            (1 << 6)
 
 // copper instruction macros
 #define COP_MOVE(addr, data) addr, data
@@ -53,9 +55,6 @@
 #define COPLIST_IDX_DIWSTOP_VALUE (9)
 #define COPLIST_IDX_COLOR00_VALUE (19)
 #define COPLIST_IDX_BPL1PTH_VALUE (19 + 64)
-
-extern struct GfxBase *GfxBase;
-extern struct Custom custom;
 
 static UWORD __chip coplist[] = {
     COP_MOVE(FMODE,   0), // set fetch mode = 0
@@ -68,7 +67,7 @@ static UWORD __chip coplist[] = {
     COP_MOVE(BPL1MOD, BPL_MODULO),
     COP_MOVE(BPL2MOD, BPL_MODULO),
 
-    // set up the screen colors
+    // set up the display colors
     COP_MOVE(COLOR00, 0x000), COP_MOVE(COLOR01, 0x000),
     COP_MOVE(COLOR02, 0x000), COP_MOVE(COLOR03, 0x000),
     COP_MOVE(COLOR04, 0x000), COP_MOVE(COLOR05, 0x000),
@@ -96,6 +95,7 @@ static UWORD __chip coplist[] = {
     COP_MOVE(BPL4PTL, 0),
     COP_MOVE(BPL5PTH, 0),
     COP_MOVE(BPL5PTL, 0),
+    COP_WAIT_END,
     COP_WAIT_END
 };
 
@@ -129,7 +129,7 @@ int main(int argc, char **argv)
 {
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
-    if (ratr0_read_tilesheet(IMG_FILE_NAME, &image, PAL_IMAGE_SIZE)) {
+    if (ratr0_read_tilesheet(IMG_FILE_NAME, &image, PAL_DISPLAY_SIZE)) {
         if (is_pal) {
             coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
         } else {
@@ -146,9 +146,9 @@ int main(int argc, char **argv)
         int coplist_idx = COPLIST_IDX_BPL1PTH_VALUE;
         for (int i = 0; i < image.header.bmdepth; i++) {
 #ifdef INTERLEAVED
-            ULONG addr = (ULONG) &(image.imgdata[i * SCREEN_ROW_BYTES]);
+            ULONG addr = (ULONG) &(image.imgdata[i * DISPLAY_ROW_BYTES]);
 #else
-            ULONG addr = (ULONG) &(image.imgdata[i * NTSC_PLANE_SIZE]);
+            ULONG addr = (ULONG) &(image.imgdata[i * image.header.height * DISPLAY_ROW_BYTES]);
 #endif
             coplist[coplist_idx] = (addr >> 16) & 0xffff;
             coplist[coplist_idx + 2] = addr & 0xffff;

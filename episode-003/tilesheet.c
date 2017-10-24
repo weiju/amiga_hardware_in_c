@@ -28,10 +28,12 @@ ULONG ratr0_read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
         // artifacts
         sheet->imgdata_size = (sheet->header.imgdata_size > min_imgdata_size) ?
             sheet->header.imgdata_size : min_imgdata_size;
-        printf("IMAGE DATA SIZE: %d, MIN SIZE: %d\n", sheet->imgdata_size, min_imgdata_size);
         sheet->imgdata = AllocMem(sheet->imgdata_size, MEMF_CHIP|MEMF_CLEAR);
         elems_read = fread(sheet->imgdata, sizeof(unsigned char), sheet->header.imgdata_size, fp);
         total_bytes += elems_read;
+        printf("IMAGE DATA SIZE: %d, MIN SIZE: %d, total file bytes: %d, img data size: %d\n",
+               (int) sheet->imgdata_size, (int) min_imgdata_size,
+               (int) total_bytes, (int) elems_read);
         fclose(fp);
     } else {
         printf("ratr0_read_tilesheet() error: file '%s' not found\n", filename);
