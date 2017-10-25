@@ -1,5 +1,5 @@
 CC = vc +kick13
-CFLAGS=  -I$(NDK_INC) -c99 -O2 -I../include -DINTERLEAVED
+CFLAGS=  -I$(NDK_INC) -c99 -O2 -I../include #-DINTERLEAVED
 LDFLAGS=-lamiga -lauto
 
 .PHONY : clean check

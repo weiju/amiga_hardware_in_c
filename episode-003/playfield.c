@@ -15,7 +15,6 @@ extern struct Custom custom;
 #define TASK_PRIORITY           (20)
 #define PRA_FIR0_BIT            (1 << 6)
 
-
 // Data fetch
 #define DDFSTRT_VALUE      0x0038
 #define DDFSTOP_VALUE      0x00d0
@@ -25,20 +24,19 @@ extern struct Custom custom;
 
 // Display dimensions and data size
 #define DISPLAY_WIDTH    (320)
-#define DISPLAY_HEIGHT   (200)
-#define DISPLAY_ROW_BYTES (DISPLAY_WIDTH / 8)
-#define PAL_PLANE_SIZE   (DISPLAY_ROW_BYTES * 256)
-#define NTSC_PLANE_SIZE   (DISPLAY_ROW_BYTES * 200)
+#define DISPLAY_HEIGHT   (256)
 #define NUM_BITPLANES    (5)
-#define PAL_DISPLAY_SIZE   ((DISPLAY_ROW_BYTES * 256) * NUM_BITPLANES )
-#define NTSC_DISPLAY_SIZE   ((DISPLAY_ROW_BYTES * 200) * NUM_BITPLANES)
+
+#define DISPLAY_ROW_BYTES (DISPLAY_WIDTH / 8)
+#define PLANE_SIZE   (DISPLAY_ROW_BYTES * DISPLAY_HEIGHT)
+#define DISPLAY_SIZE   (PLANE_SIZE * NUM_BITPLANES)
 
 #ifdef INTERLEAVED
 #define BPL_MODULO ((NUM_BITPLANES - 1) * DISPLAY_ROW_BYTES)
-#define IMG_FILE_NAME "gorilla-interleaved.img"
+#define IMG_FILE_NAME "gorilla256-interleaved.img"
 #else
 #define BPL_MODULO (0)
-#define IMG_FILE_NAME "gorilla-noninterleaved.img"
+#define IMG_FILE_NAME "gorilla256-noninterleaved.img"
 #endif
 
 // playfield control
@@ -129,7 +127,7 @@ int main(int argc, char **argv)
 {
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
-    if (ratr0_read_tilesheet(IMG_FILE_NAME, &image, PAL_DISPLAY_SIZE)) {
+    if (ratr0_read_tilesheet(IMG_FILE_NAME, &image, DISPLAY_SIZE)) {
         if (is_pal) {
             coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
         } else {
@@ -144,11 +142,13 @@ int main(int argc, char **argv)
         // 2. prepare bitplanes and point the copper list entries
         // to the bitplanes (we already initialized the modulos statically)
         int coplist_idx = COPLIST_IDX_BPL1PTH_VALUE;
+        int plane_size = image.header.height * DISPLAY_ROW_BYTES;
+        ULONG addr;
         for (int i = 0; i < image.header.bmdepth; i++) {
 #ifdef INTERLEAVED
-            ULONG addr = (ULONG) &(image.imgdata[i * DISPLAY_ROW_BYTES]);
+            addr = (ULONG) &(image.imgdata[i * DISPLAY_ROW_BYTES]);
 #else
-            ULONG addr = (ULONG) &(image.imgdata[i * image.header.height * DISPLAY_ROW_BYTES]);
+            addr = (ULONG) &(image.imgdata[i * plane_size]);
 #endif
             coplist[coplist_idx] = (addr >> 16) & 0xffff;
             coplist[coplist_idx + 2] = addr & 0xffff;
