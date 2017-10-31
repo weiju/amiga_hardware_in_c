@@ -15,12 +15,13 @@ extern struct Custom custom;
 #define TASK_PRIORITY           (20)
 #define PRA_FIR0_BIT            (1 << 6)
 
-// Data fetch
-#define DDFSTRT_VALUE      0x0038
-#define DDFSTOP_VALUE      0x00d0
 #define DIWSTRT_VALUE      0x2c81
 #define DIWSTOP_VALUE_PAL  0x2cc1
 #define DIWSTOP_VALUE_NTSC 0xf4c1
+
+// Data fetch
+#define DDFSTRT_VALUE      0x0038
+#define DDFSTOP_VALUE      0x00d0
 
 // Display dimensions and data size
 #define DISPLAY_WIDTH    (320)
@@ -41,9 +42,7 @@ extern struct Custom custom;
 
 // playfield control
 // bplcon0: use bitplane 1-5 = BPU 101, composite color enable
-// bplcon1: horizontal scroll value = 0 for all playfields
 #define BPLCON0_VALUE (0x5200)
-#define BPLCON1_VALUE (0)
 
 // copper instruction macros
 #define COP_MOVE(addr, data) addr, data
@@ -51,8 +50,8 @@ extern struct Custom custom;
 
 // copper list indexes
 #define COPLIST_IDX_DIWSTOP_VALUE (9)
-#define COPLIST_IDX_COLOR00_VALUE (19)
-#define COPLIST_IDX_BPL1PTH_VALUE (19 + 64)
+#define COPLIST_IDX_COLOR00_VALUE (17)
+#define COPLIST_IDX_BPL1PTH_VALUE (17 + 64)
 
 static UWORD __chip coplist[] = {
     COP_MOVE(FMODE,   0), // set fetch mode = 0
@@ -61,7 +60,6 @@ static UWORD __chip coplist[] = {
     COP_MOVE(DIWSTRT, DIWSTRT_VALUE),
     COP_MOVE(DIWSTOP, DIWSTOP_VALUE_PAL),
     COP_MOVE(BPLCON0, BPLCON0_VALUE),
-    COP_MOVE(BPLCON1, BPLCON1_VALUE),
     COP_MOVE(BPL1MOD, BPL_MODULO),
     COP_MOVE(BPL2MOD, BPL_MODULO),
 
