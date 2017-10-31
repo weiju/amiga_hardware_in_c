@@ -26,17 +26,11 @@ extern struct Custom custom;
 // Display dimensions and data size
 #define DISPLAY_WIDTH    (320)
 #define DISPLAY_HEIGHT   (256)
-#define NUM_BITPLANES    (5)
-
 #define DISPLAY_ROW_BYTES (DISPLAY_WIDTH / 8)
-#define PLANE_SIZE   (DISPLAY_ROW_BYTES * DISPLAY_HEIGHT)
-#define DISPLAY_SIZE   (PLANE_SIZE * NUM_BITPLANES)
 
 #ifdef INTERLEAVED
-#define BPL_MODULO ((NUM_BITPLANES - 1) * DISPLAY_ROW_BYTES)
 #define IMG_FILE_NAME "gorilla256-interleaved.img"
 #else
-#define BPL_MODULO (0)
 #define IMG_FILE_NAME "gorilla256-noninterleaved.img"
 #endif
 
@@ -50,6 +44,8 @@ extern struct Custom custom;
 
 // copper list indexes
 #define COPLIST_IDX_DIWSTOP_VALUE (9)
+#define COPLIST_IDX_BPL1MOD_VALUE (13)
+#define COPLIST_IDX_BPL2MOD_VALUE (15)
 #define COPLIST_IDX_COLOR00_VALUE (17)
 #define COPLIST_IDX_BPL1PTH_VALUE (17 + 64)
 
@@ -60,8 +56,8 @@ static UWORD __chip coplist[] = {
     COP_MOVE(DIWSTRT, DIWSTRT_VALUE),
     COP_MOVE(DIWSTOP, DIWSTOP_VALUE_PAL),
     COP_MOVE(BPLCON0, BPLCON0_VALUE),
-    COP_MOVE(BPL1MOD, BPL_MODULO),
-    COP_MOVE(BPL2MOD, BPL_MODULO),
+    COP_MOVE(BPL1MOD, 0),
+    COP_MOVE(BPL2MOD, 0),
 
     // set up the display colors
     COP_MOVE(COLOR00, 0x000), COP_MOVE(COLOR01, 0x000),
@@ -95,7 +91,6 @@ static UWORD __chip coplist[] = {
     COP_WAIT_END
 };
 
-
 static BOOL init_display(void)
 {
     LoadView(NULL);  // clear display, reset hardware registers
@@ -125,26 +120,33 @@ int main(int argc, char **argv)
 {
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
-    if (ratr0_read_tilesheet(IMG_FILE_NAME, &image, DISPLAY_SIZE)) {
+    if (ratr0_read_tilesheet(IMG_FILE_NAME, &image)) {
         if (is_pal) {
             coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
         } else {
             coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_NTSC;
         }
+        int img_row_bytes = image.header.width / 8;
         UBYTE num_colors = 1 << image.header.bmdepth;
 
-        // 1. copy the palette to the copper list
+        // 1. adjust the bitplane modulos if interleaved
+#ifdef INTERLEAVED
+        int bplmod = (image.header.bmdepth - 1) * img_row_bytes;
+        coplist[COPLIST_IDX_BPL1MOD_VALUE] = bplmod;
+        coplist[COPLIST_IDX_BPL2MOD_VALUE] = bplmod;
+#endif
+        // 2. copy the palette to the copper list
         for (int i = 0; i < num_colors; i++) {
             coplist[COPLIST_IDX_COLOR00_VALUE + (i << 1)] = image.palette[i];
         }
-        // 2. prepare bitplanes and point the copper list entries
-        // to the bitplanes (we already initialized the modulos statically)
+        // 3. prepare bitplanes and point the copper list entries
+        // to the bitplanes
         int coplist_idx = COPLIST_IDX_BPL1PTH_VALUE;
-        int plane_size = image.header.height * DISPLAY_ROW_BYTES;
+        int plane_size = image.header.height * img_row_bytes;
         ULONG addr;
         for (int i = 0; i < image.header.bmdepth; i++) {
 #ifdef INTERLEAVED
-            addr = (ULONG) &(image.imgdata[i * DISPLAY_ROW_BYTES]);
+            addr = (ULONG) &(image.imgdata[i * img_row_bytes]);
 #else
             addr = (ULONG) &(image.imgdata[i * plane_size]);
 #endif

@@ -8,11 +8,8 @@
  *
  * @param filename path to the tile sheet file
  * @param sheet pointer to a Ratr0TileSheet structure
- * @param min_imgdata_size the minimum size to reserve for the imagedata
- *        element
  */
-ULONG ratr0_read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
-                           int min_imgdata_size)
+ULONG ratr0_read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet)
 {
     int elems_read;
     FILE *fp = fopen(filename, "rb");
@@ -23,17 +20,9 @@ ULONG ratr0_read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
         total_bytes += elems_read * sizeof(struct Ratr0TileSheetHeader);
         elems_read = fread(&sheet->palette, sizeof(UWORD), sheet->header.palette_size, fp);
         total_bytes += elems_read * sizeof(UWORD);
-        // reserve enough data to fill the entire display window
-        // if we have only an NTSC sized image, but a PAL display, we might get
-        // artifacts
-        sheet->imgdata_size = (sheet->header.imgdata_size > min_imgdata_size) ?
-            sheet->header.imgdata_size : min_imgdata_size;
-        sheet->imgdata = AllocMem(sheet->imgdata_size, MEMF_CHIP|MEMF_CLEAR);
+        sheet->imgdata = AllocMem(sheet->header.imgdata_size, MEMF_CHIP|MEMF_CLEAR);
         elems_read = fread(sheet->imgdata, sizeof(unsigned char), sheet->header.imgdata_size, fp);
         total_bytes += elems_read;
-        printf("IMAGE DATA SIZE: %d, MIN SIZE: %d, total file bytes: %d, img data size: %d\n",
-               (int) sheet->imgdata_size, (int) min_imgdata_size,
-               (int) total_bytes, (int) elems_read);
         fclose(fp);
     } else {
         printf("ratr0_read_tilesheet() error: file '%s' not found\n", filename);
@@ -47,5 +36,5 @@ ULONG ratr0_read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet,
  */
 void ratr0_free_tilesheet_data(struct Ratr0TileSheet *sheet)
 {
-    if (sheet && sheet->imgdata) FreeMem(sheet->imgdata, sheet->imgdata_size);
+    if (sheet && sheet->imgdata) FreeMem(sheet->imgdata, sheet->header.imgdata_size);
 }
