@@ -47,7 +47,8 @@ extern struct Custom custom;
 #define COPLIST_IDX_BPL1MOD_VALUE (13)
 #define COPLIST_IDX_BPL2MOD_VALUE (15)
 #define COPLIST_IDX_COLOR00_VALUE (17)
-#define COPLIST_IDX_BPL1PTH_VALUE (17 + 64)
+#define COPLIST_IDX_BPL1PTH_VALUE (COPLIST_IDX_COLOR00_VALUE + 64)
+#define COPLIST_IDX_BPL1PTH_SECOND_VALUE (COPLIST_IDX_BPL1PTH_VALUE + 20 + 4)
 
 static UWORD __chip coplist[] = {
     COP_MOVE(FMODE,   0), // set fetch mode = 0
@@ -87,6 +88,20 @@ static UWORD __chip coplist[] = {
     COP_MOVE(BPL4PTL, 0),
     COP_MOVE(BPL5PTH, 0),
     COP_MOVE(BPL5PTL, 0),
+#ifdef SPLIT_SCREEN
+    0xaa05, 0xfffe,  // wait to the half of the screen (aa = 170)
+    COP_MOVE(BPLCON0, BPLCON0_VALUE),
+    COP_MOVE(BPL1PTH, 0),
+    COP_MOVE(BPL1PTL, 0),
+    COP_MOVE(BPL2PTH, 0),
+    COP_MOVE(BPL2PTL, 0),
+    COP_MOVE(BPL3PTH, 0),
+    COP_MOVE(BPL3PTL, 0),
+    COP_MOVE(BPL4PTH, 0),
+    COP_MOVE(BPL4PTL, 0),
+    COP_MOVE(BPL5PTH, 0),
+    COP_MOVE(BPL5PTL, 0),
+#endif
     COP_WAIT_END,
     COP_WAIT_END
 };
@@ -142,6 +157,7 @@ int main(int argc, char **argv)
         // 3. prepare bitplanes and point the copper list entries
         // to the bitplanes
         int coplist_idx = COPLIST_IDX_BPL1PTH_VALUE;
+        int coplist_split_idx = COPLIST_IDX_BPL1PTH_SECOND_VALUE;
         int plane_size = image.header.height * img_row_bytes;
         ULONG addr;
         for (int i = 0; i < image.header.bmdepth; i++) {
@@ -153,6 +169,13 @@ int main(int argc, char **argv)
             coplist[coplist_idx] = (addr >> 16) & 0xffff;
             coplist[coplist_idx + 2] = addr & 0xffff;
             coplist_idx += 4; // next bitplane
+
+#ifdef SPLIT_SCREEN
+            // and for the second half
+            coplist[coplist_split_idx] = (addr >> 16) & 0xffff;
+            coplist[coplist_split_idx + 2] = addr & 0xffff;
+            coplist_split_idx += 4; // next bitplane
+#endif
         }
 
         // 3. disable sprite DMA and initialize the copper list
