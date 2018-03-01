@@ -35,6 +35,10 @@ extern struct Custom custom;
 // playfield control
 // bplcon0: use bitplane 1-5 = BPU 101, composite color enable
 #define BPLCON0_VALUE (0x5200)
+// We have single playfield, so priority is determined in bits
+// 5-3 and we need to set the playfield 2 priority bit (bit 6)
+//#define BPLCON2_VALUE (0x0048)
+#define BPLCON2_VALUE (0x0040)
 
 // copper instruction macros
 #define COP_MOVE(addr, data) addr, data
@@ -42,9 +46,9 @@ extern struct Custom custom;
 
 // copper list indexes
 #define COPLIST_IDX_DIWSTOP_VALUE (9)
-#define COPLIST_IDX_BPL1MOD_VALUE (13)
-#define COPLIST_IDX_BPL2MOD_VALUE (15)
-#define COPLIST_IDX_COLOR00_VALUE (17)
+#define COPLIST_IDX_BPL1MOD_VALUE (COPLIST_IDX_DIWSTOP_VALUE + 6)
+#define COPLIST_IDX_BPL2MOD_VALUE (COPLIST_IDX_BPL1MOD_VALUE + 2)
+#define COPLIST_IDX_COLOR00_VALUE (COPLIST_IDX_BPL2MOD_VALUE + 2)
 #define COPLIST_IDX_BPL1PTH_VALUE (COPLIST_IDX_COLOR00_VALUE + 64)
 #define COPLIST_IDX_BPL1PTH_SECOND_VALUE (COPLIST_IDX_BPL1PTH_VALUE + 20 + 4)
 
@@ -58,6 +62,7 @@ static UWORD __chip coplist[] = {
     COP_MOVE(DIWSTRT, DIWSTRT_VALUE),
     COP_MOVE(DIWSTOP, DIWSTOP_VALUE_PAL),
     COP_MOVE(BPLCON0, BPLCON0_VALUE),
+    COP_MOVE(BPLCON2, BPLCON2_VALUE),
     COP_MOVE(BPL1MOD, 0),
     COP_MOVE(BPL2MOD, 0),
 
@@ -115,10 +120,8 @@ UWORD __chip NULL_SPRITE_DATA[] = {
 // size = 4 words for control words 1+2 and 2 stop data data words
 //        + <height> * 2 (bitplanes) words (2 * 8 = 16) of pixel data
 #define NEMO_DATA_WORDS (4 + 16)
-//#define NEMO_HSTART (64)
-#define NEMO_HSTART (120)
-//#define NEMO_VSTART (64)
-#define NEMO_VSTART (200)
+#define NEMO_HSTART (122)
+#define NEMO_VSTART (213)
 #define NEMO_VSTOP (NEMO_VSTART + 8)
 
 UWORD __chip nemo_data[NEMO_DATA_WORDS];
@@ -206,9 +209,6 @@ int main(int argc, char **argv)
     // now we are looking at the sprite pointers
     // setup the sprite data structure, control words + data words
     memset(nemo_data, 0, NEMO_DATA_WORDS * 2);
-
-    // hack some position so we see it
-    // low 8 bits of vstart + high 8 bits of hstart
     set_sprite_pos(nemo_data, NEMO_HSTART, NEMO_VSTART, NEMO_VSTOP);
 
     // copy image data into sprite structure set sprite 0 pointer
@@ -226,6 +226,8 @@ int main(int argc, char **argv)
 
     // initialize and activate the copper list
     custom.cop1lc = (ULONG) coplist;
+
+    // the event loop
     waitmouse();
 
     // cleanup
