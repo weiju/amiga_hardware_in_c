@@ -227,47 +227,17 @@ int setup_input_handler()
     handler_info.is_Code = (void (*)(void)) my_input_handler;
     handler_info.is_Data = NULL;
     handler_info.is_Node.ln_Pri = 100;
-    handler_info.is_Node.ln_Name = "brickit";
+    handler_info.is_Node.ln_Name = "nemo01";
     input_io->io_Command = IND_ADDHANDLER;
     input_io->io_Data = (APTR) &handler_info;
     DoIO((struct IORequest *) input_io);
     return 1;
 }
 
-/*
- * Calculate motion given a linear acceleration motion model
- */
-// acceleration velocity
-#define VELOCITY1 (FIXED_CREATE(0, 5))
-// deceleration velocity
-#define VELOCITY2 (FIXED_MUL(FIXED_CREATE(-1, 0), (FIXED_CREATE(0, 2))))
-// last frame of the acceleration phase
-#define ACCEL_LAST (20)
-// first frame of the deceleration phase
-#define DECEL_FIRST (30)
-#define D0 (FIXED_MUL(FIXED_CREATE(ACCEL_LAST, 0), VELOCITY1))
-
-FIXED displacement_at(WORD t)
-{
-    if (t <= ACCEL_LAST) {
-        return FIXED_MUL(FIXED_CREATE(t, 0), VELOCITY1);
-    } else if (t > DECEL_FIRST) {
-        // d0 + (t - i) * v
-        FIXED td = FIXED_CREATE(t, 0) - FIXED_CREATE(DECEL_FIRST, 0);
-        FIXED inc = FIXED_MUL(td, VELOCITY2);
-        FIXED df = D0 + inc; // don't allow negative displacement
-        if (df < 0) df = 0;
-        return df;
-    } else {
-        return D0;
-    }
-}
-
 int main(int argc, char **argv)
 {
     ULONG dir_ticks = 0;  // timing component
     UWORD nemo_hstart = NEMO_HSTART, nemo_vstart;
-    FIXED fish_speed;
 
     if (!setup_input_handler()) {
         puts("Could not initialize input handler");
@@ -289,11 +259,9 @@ int main(int argc, char **argv)
     if (is_pal) {
         coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
         nemo_vstart = NEMO_VSTART_PAL;
-        fish_speed = FIXED_CREATE(0, 65);
     } else {
         coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_NTSC;
         nemo_vstart = NEMO_VSTART_NTSC;
-        fish_speed = FIXED_CREATE(0, 55);
     }
     int img_row_bytes = image.header.width / 8;
     UBYTE num_colors = 1 << image.header.bmdepth;
@@ -359,25 +327,7 @@ int main(int argc, char **argv)
     int base_x = NEMO_HSTART;
 
     while (!should_exit) {
-        if (dir == 1 && dir_ticks >= movemax) {
-            // switch direction to left
-            dir = -1;
-            dir_ticks = 0;
-            coplist[COPLIST_IDX_SPR0_PTH_VALUE] = (((ULONG) nemo_l_data) >> 16) & 0xffff;
-            coplist[COPLIST_IDX_SPR0_PTH_VALUE + 2] = ((ULONG) nemo_l_data) & 0xffff;
-        } else if (dir == -1 && dir_ticks >= movemax) {
-            // switch direction to right
-            dir = 1;
-            dir_ticks = 0;
-            coplist[COPLIST_IDX_SPR0_PTH_VALUE] = (((ULONG) nemo_r_data) >> 16) & 0xffff;
-            coplist[COPLIST_IDX_SPR0_PTH_VALUE + 2] = ((ULONG) nemo_r_data) & 0xffff;
-        }
-        xpos += FIXED_MUL(FIXED_CREATE(dir, 0), displacement_at(dir_ticks));
-        incx = FIXED_INT(xpos); // how many pixels to actually shift ?
-        set_sprite_pos(nemo_r_data, base_x + incx, nemo_vstart, nemo_vstart + 8);
-        set_sprite_pos(nemo_l_data, base_x + incx, nemo_vstart, nemo_vstart + 8);
         wait_vblank();
-        dir_ticks++;
     }
 
     // cleanup
