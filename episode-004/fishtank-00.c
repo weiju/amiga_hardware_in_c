@@ -37,14 +37,11 @@ extern struct Custom custom;
 #define IMG_FILENAME_NTSC "fishtank_320x200.ts"
 
 // playfield control
-// bplcon0: use bitplane 1-5 = BPU 101, composite color enable
-//#define BPLCON0_VALUE (0x5200)
 // single playfield, 3 bitplanes (8 colors)
 #define BPLCON0_VALUE (0x3200)
 // We have single playfield, so priority is determined in bits
 // 5-3 and we need to set the playfield 2 priority bit (bit 6)
 #define BPLCON2_VALUE (0x0048)
-//#define BPLCON2_VALUE (0x0040)
 
 // copper instruction macros
 #define COP_MOVE(addr, data) addr, data
@@ -123,14 +120,14 @@ UWORD __chip NULL_SPRITE_DATA[] = {
     0x0000, 0x0000
 };
 
-
 volatile ULONG *custom_vposr = (volatile ULONG *) 0xdff004;
+
+// translated from http://eab.abime.net/showthread.php?t=51928
+static vb_waitpos;
 
 static void wait_vblank()
 {
-    // translated from http://eab.abime.net/showthread.php?t=51928
-    // 303 -> 263 for NTSC
-    while (((*custom_vposr) & 0x1ff00) != (303<<8)) ;
+    while (((*custom_vposr) & 0x1ff00) != (vb_waitpos<<8)) ;
 }
 
 static BOOL init_display(void)
@@ -218,6 +215,8 @@ int main(int argc, char **argv)
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
     const char *bgfile = is_pal ? IMG_FILENAME_PAL : IMG_FILENAME_NTSC;
+    vb_waitpos = is_pal ? 303 : 262;  // line to wait for vertical blanking
+
     if (!ratr0_read_tilesheet(bgfile, &image)) {
         puts("Could not read background image");
         return 1;
