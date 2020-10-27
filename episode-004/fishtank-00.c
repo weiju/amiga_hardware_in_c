@@ -33,8 +33,8 @@ extern struct Custom custom;
 #define DISPLAY_HEIGHT   (256)
 #define DISPLAY_ROW_BYTES (DISPLAY_WIDTH / 8)
 
-#define IMG_FILENAME_PAL "fishtank_320x256.ts"
-#define IMG_FILENAME_NTSC "fishtank_320x200.ts"
+#define IMG_FILENAME_PAL "fishtank_320x256x3.ts"
+#define IMG_FILENAME_NTSC "fishtank_320x200x3.ts"
 
 // playfield control
 // single playfield, 3 bitplanes (8 colors)
@@ -216,7 +216,6 @@ int main(int argc, char **argv)
     BOOL is_pal = init_display();
     const char *bgfile = is_pal ? IMG_FILENAME_PAL : IMG_FILENAME_NTSC;
     vb_waitpos = is_pal ? 303 : 262;  // line to wait for vertical blanking
-
     if (!ratr0_read_tilesheet(bgfile, &image)) {
         puts("Could not read background image");
         return 1;
