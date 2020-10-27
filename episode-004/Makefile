@@ -1,7 +1,7 @@
 CC=vc +kick13
 CFLAGS=-I$(NDK_INC) -c99 -O2 -I../include
 LDFLAGS=-lamiga -lauto
-EXES=fishtank
+EXES=fishtank-01 fishtank
 
 .PHONY : clean check
 .SUFFIXES : .o .c
@@ -17,10 +17,6 @@ clean:
 fishtank: fishtank.o tilesheet.o
 	$(CC) $^ $(LDFLAGS) -o $@
 
-
-fishtank.o: fishtank.c
-	$(CC) $(CFLAGS) $^ -c -o $@
-
-tilesheet.o: tilesheet.c
-	$(CC) $(CFLAGS) $^ -c -o $@
+fishtank-01: fishtank-01.o tilesheet.o
+	$(CC) $^ $(LDFLAGS) -o $@
 
