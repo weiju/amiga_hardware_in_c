@@ -1,3 +1,8 @@
+/**
+ * example_02.c - overlapping sprite example
+ * This example demonstrates a sprite that consists of two sprites
+ * that are displayed next to each other.
+ */
 #include <stdio.h>
 #include <string.h>
 #include <hardware/custom.h>
@@ -33,19 +38,15 @@ extern struct Custom custom;
 #define DISPLAY_HEIGHT   (256)
 #define DISPLAY_ROW_BYTES (DISPLAY_WIDTH / 8)
 
-#define IMG_FILENAME_PAL "fishtank_320x256.ts"
-#define IMG_FILENAME_NTSC "fishtank_320x200.ts"
-#define SPRITE_FILE_NAME "nemo_lr.ts"
+#define IMG_FILENAME_PAL "fishtank_320x256x3.ts"
+#define IMG_FILENAME_NTSC "fishtank_320x200x3.ts"
 
 // playfield control
-// bplcon0: use bitplane 1-5 = BPU 101, composite color enable
-//#define BPLCON0_VALUE (0x5200)
 // single playfield, 3 bitplanes (8 colors)
 #define BPLCON0_VALUE (0x3200)
 // We have single playfield, so priority is determined in bits
 // 5-3 and we need to set the playfield 2 priority bit (bit 6)
 #define BPLCON2_VALUE (0x0048)
-//#define BPLCON2_VALUE (0x0040)
 
 // copper instruction macros
 #define COP_MOVE(addr, data) addr, data
@@ -58,7 +59,6 @@ extern struct Custom custom;
 #define COPLIST_IDX_BPL2MOD_VALUE (COPLIST_IDX_BPL1MOD_VALUE + 2)
 #define COPLIST_IDX_COLOR00_VALUE (COPLIST_IDX_BPL2MOD_VALUE + 2)
 #define COPLIST_IDX_BPL1PTH_VALUE (COPLIST_IDX_COLOR00_VALUE + 64)
-#define COPLIST_IDX_BPL1PTH_SECOND_VALUE (COPLIST_IDX_BPL1PTH_VALUE + 20 + 4)
 
 static UWORD __chip coplist[] = {
     COP_MOVE(FMODE,   0), // set fetch mode = 0
@@ -119,31 +119,19 @@ static UWORD __chip coplist[] = {
 };
 
 // null sprite data for sprites that are supposed to be inactive
-UWORD __chip NULL_SPRITE_DATA[] = {
+static UWORD __chip NULL_SPRITE_DATA[] = {
     0x0000, 0x0000,
     0x0000, 0x0000
 };
 
-// size = 4 words for control words 1+2 and 2 stop data data words
-//        + <height> * 2 (bitplanes) words (2 * 8 = 16) of pixel data
-#define NEMO_DATA_WORDS (4 + 16)
-#define NEMO_FRAME_BYTES (32)
-#define NEMO_HSTART (140)
-#define NEMO_VSTART_PAL  (213)
-#define NEMO_VSTART_NTSC (170)
+static volatile ULONG *custom_vposr = (volatile ULONG *) 0xdff004;
 
-UWORD __chip nemo_l_data[NEMO_DATA_WORDS];
-UWORD __chip nemo_r_data[NEMO_DATA_WORDS];
-
-volatile UBYTE *custom_vhposr = (volatile UBYTE *) 0xdff006;
-volatile ULONG *custom_vposr = (volatile ULONG *) 0xdff004;
-volatile UBYTE *ciaa_pra = (volatile UBYTE *) 0xbfe001;
+// translated from http://eab.abime.net/showthread.php?t=51928
+static vb_waitpos;
 
 static void wait_vblank()
 {
-    // translated from http://eab.abime.net/showthread.php?t=51928
-    // 303 -> 263 for NTSC
-    while (((*custom_vposr) & 0x1ff00) != (303<<8)) ;
+    while (((*custom_vposr) & 0x1ff00) != (vb_waitpos<<8)) ;
 }
 
 static BOOL init_display(void)
@@ -164,24 +152,12 @@ static void reset_display(void)
 }
 
 static struct Ratr0TileSheet image;
-static struct Ratr0TileSheet sprite;
-
-void set_sprite_pos(UWORD *sprite_data, UWORD hstart, UWORD vstart, UWORD vstop)
-{
-    sprite_data[0] = ((vstart & 0xff) << 8) | ((hstart >> 1) & 0xff);
-    // vstop + high bit of vstart + low bit of hstart
-    sprite_data[1] = ((vstop & 0xff) << 8) |  // vstop 8 low bits
-        ((vstart >> 8) & 1) << 2 |  // vstart high bit
-        ((vstop >> 8) & 1) << 1 |   // vstop high bit
-        (hstart & 1);  // hstart low bit
-}
 
 // To handle input
-struct MsgPort *input_mp;
-struct IOStdReq *input_io;
-struct Interrupt handler_info;
-BYTE error = 0;
-int should_exit = 0;
+static struct MsgPort *input_mp;
+static struct IOStdReq *input_io;
+static struct Interrupt handler_info;
+static int should_exit;
 
 struct InputEvent *my_input_handler(__reg("a0") struct InputEvent *event,
                                     __reg("a1") APTR handler_data)
@@ -201,7 +177,7 @@ struct InputEvent *my_input_handler(__reg("a0") struct InputEvent *event,
     return result;
 }
 
-void cleanup_input_handler(void)
+static void cleanup_input_handler(void)
 {
     if (input_io) {
         // remove our input handler from the chain
@@ -217,7 +193,9 @@ void cleanup_input_handler(void)
     if (input_mp) DeletePort(input_mp);
 }
 
-int setup_input_handler()
+static BYTE error = 0;
+
+static int setup_input_handler()
 {
     input_mp = CreatePort(0, 0);
     input_io = (struct IOStdReq *) CreateExtIO(input_mp, sizeof(struct IOStdReq));
@@ -233,10 +211,71 @@ int setup_input_handler()
     return 1;
 }
 
+UWORD nemo_palette[] = {
+  0x0672, 0x0100, 0x0d40, 0x0fff
+};
+
+UWORD __chip nemo_data_l[] = {
+  0x0020, 0x0000,
+  0x000e, 0x0000,
+  0x0031, 0x000e,
+  0x07c0, 0x003f,
+  0x1f00, 0x06ff,
+  0x6380, 0x1f7f,
+  0x9b81, 0x677e,
+  0x9b83, 0x677d,
+  0x8387, 0x7f78,
+  0x4399, 0x3f66,
+  0x2701, 0x1efe,
+  0x1e23, 0x0ddd,
+  0x0e1f, 0x01e3,
+  0x0107, 0x00f9,
+  0x0089, 0x0070,
+  0x0050, 0x0020,
+  0x0030, 0x0000,
+  0x0000, 0x0000
+};
+
+UWORD __chip nemo_data_r[] = {
+  0x0020, 0x0000,
+  0x0000, 0x0000,
+  0x0000, 0x0000,
+  0xe000, 0x0000,
+  0x7c00, 0x8000,
+  0xfb00, 0x7400,
+  0xf180, 0xee00,
+  0xe080, 0xdf00,
+  0xe080, 0xdf00,
+  0xc0ec, 0xbf00,
+  0xc1f2, 0xbeec,
+  0xc1e1, 0xbede,
+  0x83c1, 0x7dbe,
+  0x87c1, 0x78be,
+  0xc4c1, 0x383e,
+  0x7c20, 0x001e,
+  0x001c, 0x0000,
+  0x0000, 0x0000
+};
+
+static void set_sprite_pos(UWORD *sprite_data, UWORD hstart, UWORD vstart, UWORD vstop)
+{
+    sprite_data[0] = ((vstart & 0xff) << 8) | ((hstart >> 1) & 0xff);
+    // vstop + high bit of vstart + low bit of hstart
+    sprite_data[1] = ((vstop & 0xff) << 8) |  // vstop 8 low bits
+        ((vstart >> 8) & 1) << 2 |  // vstart high bit
+        ((vstop >> 8) & 1) << 1 |   // vstop high bit
+        (hstart & 1);  // hstart low bit
+}
+
+static void cleanup(void)
+{
+    cleanup_input_handler();
+    ratr0_free_tilesheet_data(&image);
+    reset_display();
+}
+
 int main(int argc, char **argv)
 {
-    UWORD nemo_hstart = NEMO_HSTART, nemo_vstart;
-
     if (!setup_input_handler()) {
         puts("Could not initialize input handler");
         return 1;
@@ -244,22 +283,16 @@ int main(int argc, char **argv)
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
     const char *bgfile = is_pal ? IMG_FILENAME_PAL : IMG_FILENAME_NTSC;
+    vb_waitpos = is_pal ? 303 : 262;  // line to wait for vertical blanking
     if (!ratr0_read_tilesheet(bgfile, &image)) {
         puts("Could not read background image");
-        return 1;
-    }
-    if (!ratr0_read_tilesheet(SPRITE_FILE_NAME, &sprite)) {
-        puts("Could not read sprite image");
-        ratr0_free_tilesheet_data(&image);
         return 1;
     }
 
     if (is_pal) {
         coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
-        nemo_vstart = NEMO_VSTART_PAL;
     } else {
         coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_NTSC;
-        nemo_vstart = NEMO_VSTART_NTSC;
     }
     int img_row_bytes = image.header.width / 8;
     UBYTE num_colors = 1 << image.header.bmdepth;
@@ -273,14 +306,10 @@ int main(int argc, char **argv)
     for (int i = 0; i < num_colors; i++) {
         coplist[COPLIST_IDX_COLOR00_VALUE + (i << 1)] = image.palette[i];
     }
-    // 3. copy the sprite palette to the copper list
-    for (int i = 0; i < 4; i++) {
-        coplist[COPLIST_IDX_COLOR00_VALUE + ((16 + i) << 1)] = sprite.palette[i];
-    }
-    // 4. prepare bitplanes and point the copper list entries
+
+    // 3. prepare bitplanes and point the copper list entries
     // to the bitplanes
     int coplist_idx = COPLIST_IDX_BPL1PTH_VALUE;
-    int coplist_split_idx = COPLIST_IDX_BPL1PTH_SECOND_VALUE;
     int plane_size = image.header.height * img_row_bytes;
     ULONG addr;
     for (int i = 0; i < image.header.bmdepth; i++) {
@@ -289,31 +318,30 @@ int main(int argc, char **argv)
         coplist[coplist_idx + 2] = addr & 0xffff;
         coplist_idx += 4; // next bitplane
     }
-    // now we are looking at the sprite pointers
-    // setup the sprite data structure, control words + data words
-    memset(nemo_l_data, 0, NEMO_DATA_WORDS * 2);
-    memset(nemo_r_data, 0, NEMO_DATA_WORDS * 2);
-    // 8 pixel high (change when sprite image changes)
-    set_sprite_pos(nemo_l_data, nemo_hstart, nemo_vstart, nemo_vstart + 8);
-    set_sprite_pos(nemo_r_data, nemo_hstart, nemo_vstart, nemo_vstart + 8);
 
-    // copy image data into sprite structure set sprite 0 pointer
-    UBYTE *dst = (UBYTE *) &nemo_r_data[2];
-    for (int i = 0; i < NEMO_FRAME_BYTES; i++) {
-        dst[i] = sprite.imgdata[i];
-    }
-    dst = (UBYTE *) &nemo_l_data[2];
-    for (int i = 0; i < NEMO_FRAME_BYTES; i++) {
-        dst[i] = sprite.imgdata[32 + i];
-    }
-
-    coplist[COPLIST_IDX_SPR0_PTH_VALUE] = (((ULONG) nemo_r_data) >> 16) & 0xffff;
-    coplist[COPLIST_IDX_SPR0_PTH_VALUE + 2] = ((ULONG) nemo_r_data) & 0xffff;
-    // point sprites 1-7 to nothing
-    for (int i = 1; i < 8; i++) {
+    // point sprites 0-7 to nothing
+    for (int i = 0; i < 8; i++) {
         coplist[COPLIST_IDX_SPR0_PTH_VALUE + i * 4] = (((ULONG) NULL_SPRITE_DATA) >> 16) & 0xffff;
         coplist[COPLIST_IDX_SPR0_PTH_VALUE + i * 4 + 2] = ((ULONG) NULL_SPRITE_DATA) & 0xffff;
     }
+
+    // Set SPRITE DATA START
+    // now point sprite 0 to the nemo left half data and sprite 1 to the right half
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE] = (((ULONG) nemo_data_l) >> 16) & 0xffff;
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE+ 2] = ((ULONG) nemo_data_l) & 0xffff;
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE + 4] = (((ULONG) nemo_data_r) >> 16) & 0xffff;
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE+ 6] = ((ULONG) nemo_data_r) & 0xffff;
+
+    // set sprite color
+    for (int i = 1; i < 4; i++) {
+        coplist[COPLIST_IDX_COLOR00_VALUE + ((16 + i) << 1)] = nemo_palette[i];
+    }
+
+    // and set the sprite position
+    UWORD nemo_x = 220, nemo_y = 180,nemo_height = 16;
+    set_sprite_pos(nemo_data_l, nemo_x, nemo_y, nemo_y + nemo_height);
+    set_sprite_pos(nemo_data_r, nemo_x + 16, nemo_y, nemo_y + nemo_height);
+    // SET SPRITE DATA END
 
     // initialize and activate the copper list
     custom.cop1lc = (ULONG) coplist;
@@ -323,11 +351,6 @@ int main(int argc, char **argv)
         wait_vblank();
     }
 
-    // cleanup
-    cleanup_input_handler();
-
-    ratr0_free_tilesheet_data(&image);
-    ratr0_free_tilesheet_data(&sprite);
-    reset_display();
+    cleanup();
     return 0;
 }

@@ -1,3 +1,7 @@
+#pragma once
+#ifndef __TILESHEET_H__
+#define __TILESHEET_H__
+
 // information about a tile sheet
 #define FILE_ID_LEN (8)
 
@@ -27,3 +31,5 @@ struct Ratr0TileSheet {
 
 extern ULONG ratr0_read_tilesheet(const char *filename, struct Ratr0TileSheet *sheet);
 extern void ratr0_free_tilesheet_data(struct Ratr0TileSheet *sheet);
+
+#endif /* __TILESHEET_H__ */

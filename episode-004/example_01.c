@@ -1,3 +1,8 @@
+/**
+ * example_01.c - simple sprite example
+ * This example program displays a simple 16 pixel wide fish sprite
+ * in a fishtank.
+ */
 #include <stdio.h>
 #include <string.h>
 #include <hardware/custom.h>
@@ -54,7 +59,6 @@ extern struct Custom custom;
 #define COPLIST_IDX_BPL2MOD_VALUE (COPLIST_IDX_BPL1MOD_VALUE + 2)
 #define COPLIST_IDX_COLOR00_VALUE (COPLIST_IDX_BPL2MOD_VALUE + 2)
 #define COPLIST_IDX_BPL1PTH_VALUE (COPLIST_IDX_COLOR00_VALUE + 64)
-#define COPLIST_IDX_BPL1PTH_SECOND_VALUE (COPLIST_IDX_BPL1PTH_VALUE + 20 + 4)
 
 static UWORD __chip coplist[] = {
     COP_MOVE(FMODE,   0), // set fetch mode = 0
@@ -115,12 +119,12 @@ static UWORD __chip coplist[] = {
 };
 
 // null sprite data for sprites that are supposed to be inactive
-UWORD __chip NULL_SPRITE_DATA[] = {
+static UWORD __chip NULL_SPRITE_DATA[] = {
     0x0000, 0x0000,
     0x0000, 0x0000
 };
 
-volatile ULONG *custom_vposr = (volatile ULONG *) 0xdff004;
+static volatile ULONG *custom_vposr = (volatile ULONG *) 0xdff004;
 
 // translated from http://eab.abime.net/showthread.php?t=51928
 static vb_waitpos;
@@ -150,14 +154,13 @@ static void reset_display(void)
 static struct Ratr0TileSheet image;
 
 // To handle input
-struct MsgPort *input_mp;
-struct IOStdReq *input_io;
-struct Interrupt handler_info;
-BYTE error = 0;
-int should_exit = 0;
+static struct MsgPort *input_mp;
+static struct IOStdReq *input_io;
+static struct Interrupt handler_info;
+static int should_exit;
 
-struct InputEvent *my_input_handler(__reg("a0") struct InputEvent *event,
-                                    __reg("a1") APTR handler_data)
+static struct InputEvent *my_input_handler(__reg("a0") struct InputEvent *event,
+                                           __reg("a1") APTR handler_data)
 {
     struct InputEvent *result = event, *prev = NULL;
 
@@ -174,7 +177,7 @@ struct InputEvent *my_input_handler(__reg("a0") struct InputEvent *event,
     return result;
 }
 
-void cleanup_input_handler(void)
+static void cleanup_input_handler(void)
 {
     if (input_io) {
         // remove our input handler from the chain
@@ -190,7 +193,9 @@ void cleanup_input_handler(void)
     if (input_mp) DeletePort(input_mp);
 }
 
-int setup_input_handler()
+static BYTE error;
+
+static int setup_input_handler(void)
 {
     input_mp = CreatePort(0, 0);
     input_io = (struct IOStdReq *) CreateExtIO(input_mp, sizeof(struct IOStdReq));
@@ -204,6 +209,40 @@ int setup_input_handler()
     input_io->io_Data = (APTR) &handler_info;
     DoIO((struct IORequest *) input_io);
     return 1;
+}
+
+static UWORD nemo_palette[] = {
+  0x0672, 0x0100, 0x0fff, 0x0d40
+};
+
+static UWORD __chip nemo_data[] = {
+  0x0008, 0x0000,
+  0x0300, 0x0000,
+  0x1f80, 0x1fe0,
+  0x6f30, 0x7ff0,
+  0xec78, 0xdff8,
+  0x6e78, 0x7dfc,
+  0x1ef7, 0x1bfe,
+  0x0ee7, 0x07fe,
+  0x0466, 0x0004,
+  0x0000, 0x0000
+};
+
+static void set_sprite_pos(UWORD *sprite_data, UWORD hstart, UWORD vstart, UWORD vstop)
+{
+    sprite_data[0] = ((vstart & 0xff) << 8) | ((hstart >> 1) & 0xff);
+    // vstop + high bit of vstart + low bit of hstart
+    sprite_data[1] = ((vstop & 0xff) << 8) |  // vstop 8 low bits
+        ((vstart >> 8) & 1) << 2 |  // vstart high bit
+        ((vstop >> 8) & 1) << 1 |   // vstop high bit
+        (hstart & 1);  // hstart low bit
+}
+
+static void cleanup(void)
+{
+    cleanup_input_handler();
+    ratr0_free_tilesheet_data(&image);
+    reset_display();
 }
 
 int main(int argc, char **argv)
@@ -242,7 +281,6 @@ int main(int argc, char **argv)
     // 3. prepare bitplanes and point the copper list entries
     // to the bitplanes
     int coplist_idx = COPLIST_IDX_BPL1PTH_VALUE;
-    int coplist_split_idx = COPLIST_IDX_BPL1PTH_SECOND_VALUE;
     int plane_size = image.header.height * img_row_bytes;
     ULONG addr;
     for (int i = 0; i < image.header.bmdepth; i++) {
@@ -258,20 +296,29 @@ int main(int argc, char **argv)
         coplist[COPLIST_IDX_SPR0_PTH_VALUE + i * 4 + 2] = ((ULONG) NULL_SPRITE_DATA) & 0xffff;
     }
 
+    // Set SPRITE DATA START
+    // now point sprite 0 to the nemo data
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE] = (((ULONG) nemo_data) >> 16) & 0xffff;
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE+ 2] = ((ULONG) nemo_data) & 0xffff;
+
+    // set sprite color
+    for (int i = 1; i < 4; i++) {
+        coplist[COPLIST_IDX_COLOR00_VALUE + ((16 + i) << 1)] = nemo_palette[i];
+    }
+
+    // and set the sprite position
+    UWORD nemo_x = 180, nemo_y = 160,nemo_height = 8;
+    set_sprite_pos(nemo_data, nemo_x, nemo_y, nemo_y + nemo_height);
+    // SET SPRITE DATA END
+
     // initialize and activate the copper list
     custom.cop1lc = (ULONG) coplist;
 
     // the event loop
-    int dir = 1, incx = 0;
-
     while (!should_exit) {
         wait_vblank();
     }
 
-    // cleanup
-    cleanup_input_handler();
-
-    ratr0_free_tilesheet_data(&image);
-    reset_display();
+    cleanup();
     return 0;
 }
