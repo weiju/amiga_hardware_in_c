@@ -212,10 +212,52 @@ static int setup_input_handler(void)
     return 1;
 }
 
-static struct Ratr0SpriteSheet nemo1, nemo2;
+// Sprite data from C generation
+UWORD nemo_palette[] = {
+  0x0626, 0x0100, 0x0fff, 0x0d40
+};
 
-// Composite sprites
-static ULONG nemo_sprite1[2], nemo_sprite2[2];
+UWORD __chip sprdata0[] = {
+  0x0020, 0x0000,
+  0x0000, 0x0000,
+  0x0000, 0x0000,
+  0x0007, 0x0000,
+  0x003f, 0x0001,
+  0x00f1, 0x002e,
+  0x01f8, 0x0077,
+  0x01fc, 0x00fb,
+  0x01fc, 0x00fb,
+  0x37fe, 0x00fd,
+  0x78fe, 0x377d,
+  0xfcfe, 0x7b7d,
+  0xfe7f, 0x7dbe,
+  0xfeff, 0x7d1e,
+  0xff3f, 0x7c1c,
+  0x7c3e, 0x3800,
+  0x3800, 0x0000,
+  0x0000, 0x0000
+};
+
+UWORD __chip sprdata1[] = {
+  0x0020, 0x0000,
+  0x7000, 0x0000,
+  0xfc00, 0x7000,
+  0xffe0, 0xfc00,
+  0xff98, 0xff60,
+  0xff3e, 0xfef8,
+  0xff3f, 0x7ee6,
+  0x7f3f, 0xbee6,
+  0xff3f, 0x1efe,
+  0xff3e, 0x66fc,
+  0xff9c, 0x7f78,
+  0x7fc8, 0xbbb0,
+  0x3ff0, 0xc780,
+  0x7f80, 0x9f00,
+  0x9f00, 0x0e00,
+  0x0e00, 0x0400,
+  0x0c00, 0x0000,
+  0x0000, 0x0000
+};
 
 static void set_sprite_pos(UWORD *sprite_data, UWORD hstart, UWORD vstart, UWORD vstop)
 {
@@ -228,34 +270,10 @@ static void set_sprite_pos(UWORD *sprite_data, UWORD hstart, UWORD vstart, UWORD
         sprite_data[1] & 0x80;      // new for attached sprites: preserve attach bit
 }
 
-static void set_sprite_ptrs(ULONG *sprite, int n, int coplist_idx)
-{
-    for (int i = 0; i < n; i++) {
-        coplist[coplist_idx + i * 4] = (sprite[i] >> 16) & 0xffff;
-        coplist[coplist_idx + i * 4 + 2] = sprite[i] & 0xffff;
-    }
-}
-
-// set position for a composite sprite (non-attached, 32 pixel wide)
-static void set_sprite_pos_32(ULONG sprite[2], UWORD hstart, UWORD vstart, UWORD vstop)
-{
-    set_sprite_pos((UWORD *) sprite[0], hstart, vstart, vstop);
-    set_sprite_pos((UWORD *) sprite[1], hstart + 16, vstart, vstop);
-}
-
-static void init_composite_sprite(ULONG *sprite, int n, struct Ratr0SpriteSheet *sheet)
-{
-    for (int i = 0; i < n; i++) {
-        sprite[i] = ((ULONG) sheet->imgdata) + sheet->sprite_offsets[i];
-    }
-}
-
 static void cleanup(void)
 {
     cleanup_input_handler();
     ratr0_free_tilesheet_data(&image);
-    ratr0_free_spritesheet_data(&nemo1);
-    ratr0_free_spritesheet_data(&nemo2);
     reset_display();
 }
 
@@ -276,19 +294,6 @@ int main(int argc, char **argv)
         cleanup();
         return 1;
     }
-    // Read sprite sheets
-    if (!ratr0_read_spritesheet("nemo32x16x2_r2l.spr", &nemo1)) {
-        puts("could not read nemo sprite 1");
-        cleanup();
-        return 1;
-    }
-    if (!ratr0_read_spritesheet("nemo32x16x2_l2r.spr", &nemo2)) {
-        puts("could not read nemo sprite 2");
-        cleanup();
-        return 1;
-    }
-    init_composite_sprite(nemo_sprite1, 2, &nemo1);
-    init_composite_sprite(nemo_sprite2, 2, &nemo2);
 
     if (is_pal) {
         coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
@@ -327,19 +332,23 @@ int main(int argc, char **argv)
     }
 
     // Set SPRITE DATA START
-    set_sprite_ptrs(nemo_sprite1, 2, COPLIST_IDX_SPR0_PTH_VALUE);  // nemo uses 2 sprites
+    // point the sprite data appropriately
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE] = (((ULONG) sprdata0) >> 16) & 0xffff;
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE+ 2] = ((ULONG) sprdata0) & 0xffff;
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE + 4] = (((ULONG) sprdata1) >> 16) & 0xffff;
+    coplist[COPLIST_IDX_SPR0_PTH_VALUE+ 6] = ((ULONG) sprdata1) & 0xffff;
 
     // set sprite colors, from the nemo palette
-    for (int i = 1; i < 16; i++) {
-        coplist[COPLIST_IDX_COLOR00_VALUE + ((16 + i) * 2)] = nemo1.palette[i];
+    for (int i = 1; i < 4; i++) {
+        coplist[COPLIST_IDX_COLOR00_VALUE + ((16 + i) * 2)] = nemo_palette[i];
     }
 
     // and set the sprite position
     UWORD nemo1_x = 320, nemo1_y = 48, nemo_height = 16;
-    set_sprite_pos_32(nemo_sprite1, nemo1_x, nemo1_y, nemo1_y + nemo_height);
     UWORD nemo2_x = 320, nemo2_y = 148;
-    set_sprite_pos_32(nemo_sprite2, nemo2_x, nemo2_y, nemo2_y + nemo_height);
 
+    set_sprite_pos(sprdata0, nemo1_x, nemo1_y, nemo1_y + nemo_height);
+    set_sprite_pos(sprdata1, nemo1_x + 16, nemo1_y, nemo1_y + nemo_height);
     // SET SPRITE DATA END
 
     // initialize and activate the copper list
