@@ -235,6 +235,26 @@ UWORD __chip sprdata0[] = {
   0xff3f, 0x7c1c,
   0x7c3e, 0x3800,
   0x3800, 0x0000,
+  // 0x0000, 0x0000
+
+  // second sprite, multiplexed
+  0x0020, 0x0000,
+  0x000e, 0x0000,
+  0x003f, 0x000e,
+  0x07ff, 0x003f,
+  0x19ff, 0x06ff,
+  0x7cff, 0x1f7f,
+  0xfcff, 0x677e,
+  0xfcfe, 0x677d,
+  0xfcff, 0x7f78,
+  0x7cff, 0x3f66,
+  0x39ff, 0x1efe,
+  0x13fe, 0x0ddd,
+  0x0ffc, 0x01e3,
+  0x01fe, 0x00f9,
+  0x00f9, 0x0070,
+  0x0070, 0x0020,
+  0x0030, 0x0000,
   0x0000, 0x0000
 };
 
@@ -256,8 +276,30 @@ UWORD __chip sprdata1[] = {
   0x9f00, 0x0e00,
   0x0e00, 0x0400,
   0x0c00, 0x0000,
+  //0x0000, 0x0000
+
+  // multiplexed
+  0x0020, 0x0000,
+  0x0000, 0x0000,
+  0x0000, 0x0000,
+  0xe000, 0x0000,
+  0xfc00, 0x8000,
+  0x8f00, 0x7400,
+  0x1f80, 0xee00,
+  0x3f80, 0xdf00,
+  0x3f80, 0xdf00,
+  0x7fec, 0xbf00,
+  0x7f1e, 0xbeec,
+  0x7f3f, 0xbede,
+  0xfe7f, 0x7dbe,
+  0xff7f, 0x78be,
+  0xfcff, 0x383e,
+  0x7c3e, 0x001c,
+  0x001c, 0x0000,
   0x0000, 0x0000
 };
+
+
 
 static void set_sprite_pos(UWORD *sprite_data, UWORD hstart, UWORD vstart, UWORD vstop)
 {
@@ -345,10 +387,16 @@ int main(int argc, char **argv)
 
     // and set the sprite position
     UWORD nemo1_x = 320, nemo1_y = 48, nemo_height = 16;
-    UWORD nemo2_x = 320, nemo2_y = 148;
+    UWORD nemo2_x = 320, nemo2_y = 48 + 16;
 
+    // Position for the first use of sprite 0 and 1
     set_sprite_pos(sprdata0, nemo1_x, nemo1_y, nemo1_y + nemo_height);
     set_sprite_pos(sprdata1, nemo1_x + 16, nemo1_y, nemo1_y + nemo_height);
+
+    // Position for the second use of sprite 0 and 1
+    set_sprite_pos(&sprdata0[34], nemo1_x, nemo2_y, nemo2_y + nemo_height);
+    set_sprite_pos(&sprdata1[34], nemo2_x + 16, nemo2_y, nemo2_y + nemo_height);
+
     // SET SPRITE DATA END
 
     // initialize and activate the copper list
