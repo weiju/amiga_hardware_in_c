@@ -102,8 +102,6 @@ static UWORD __chip coplist[] = {
     COP_MOVE(BPL1PTH, 0), COP_MOVE(BPL1PTL, 0),
     COP_MOVE(BPL2PTH, 0), COP_MOVE(BPL2PTL, 0),
     COP_MOVE(BPL3PTH, 0), COP_MOVE(BPL3PTL, 0),
-    COP_MOVE(BPL4PTH, 0), COP_MOVE(BPL4PTL, 0),
-    COP_MOVE(BPL5PTH, 0), COP_MOVE(BPL5PTL, 0),
 
     // change background color so it's not so plain
     0x5c07, 0xfffe,
@@ -124,8 +122,8 @@ static UWORD __chip NULL_SPRITE_DATA[] = {
 };
 
 static volatile ULONG *custom_vposr = (volatile ULONG *) 0xdff004;
-static volatile UWORD *custom_clxdat = (volatile UWORD *) 0xdff00e;
 
+// Wait for this position for vertical blank
 // translated from http://eab.abime.net/showthread.php?t=51928
 static vb_waitpos;
 
@@ -159,6 +157,9 @@ static struct IOStdReq *input_io;
 static struct Interrupt handler_info;
 
 static int should_exit;
+#define CURSOR_UP (0x4c)
+#define CURSOR_DOWN (0x4d)
+UWORD nemo2_y = 48 + 17;
 
 static struct InputEvent *my_input_handler(__reg("a0") struct InputEvent *event,
                                            __reg("a1") APTR handler_data)
@@ -173,6 +174,14 @@ static struct InputEvent *my_input_handler(__reg("a0") struct InputEvent *event,
             should_exit = 1;
         }
         return NULL;
+    } else if (result->ie_Class == IECLASS_RAWKEY) {
+        if (result->ie_Code == CURSOR_UP) {
+            nemo2_y--;
+            if (nemo2_y < 48) nemo2_y = 48;
+        } else if (result->ie_Code == CURSOR_DOWN) {
+            nemo2_y++;
+            if (nemo2_y > 100) nemo2_y = 100;
+        }
     }
     Permit();
     return result;
@@ -219,7 +228,7 @@ UWORD nemo_palette[] = {
 
 UWORD __chip sprdata0[] = {
   0x0020, 0x0000,
-  0x0000, 0x0000,
+  0x0000, 0xffff,
   0x0000, 0x0000,
   0x0007, 0x0000,
   0x003f, 0x0001,
@@ -234,12 +243,12 @@ UWORD __chip sprdata0[] = {
   0xfeff, 0x7d1e,
   0xff3f, 0x7c1c,
   0x7c3e, 0x3800,
-  0x3800, 0x0000,
-  // 0x0000, 0x0000
+  0x0000, 0xffff,
+  //0x0000, 0x0000
 
   // second sprite, multiplexed
   0x0020, 0x0000,
-  0x000e, 0x0000,
+  0x0000, 0xffff,
   0x003f, 0x000e,
   0x07ff, 0x003f,
   0x19ff, 0x06ff,
@@ -254,13 +263,13 @@ UWORD __chip sprdata0[] = {
   0x01fe, 0x00f9,
   0x00f9, 0x0070,
   0x0070, 0x0020,
-  0x0030, 0x0000,
+  0x0000, 0xffff,
   0x0000, 0x0000
 };
 
 UWORD __chip sprdata1[] = {
   0x0020, 0x0000,
-  0x7000, 0x0000,
+  0x0000, 0xffff,
   0xfc00, 0x7000,
   0xffe0, 0xfc00,
   0xff98, 0xff60,
@@ -275,12 +284,12 @@ UWORD __chip sprdata1[] = {
   0x7f80, 0x9f00,
   0x9f00, 0x0e00,
   0x0e00, 0x0400,
-  0x0c00, 0x0000,
+  0x0000, 0xffff,
   //0x0000, 0x0000
 
   // multiplexed
   0x0020, 0x0000,
-  0x0000, 0x0000,
+  0x0000, 0xffff,
   0x0000, 0x0000,
   0xe000, 0x0000,
   0xfc00, 0x8000,
@@ -295,11 +304,9 @@ UWORD __chip sprdata1[] = {
   0xff7f, 0x78be,
   0xfcff, 0x383e,
   0x7c3e, 0x001c,
-  0x001c, 0x0000,
+  0x0000, 0xffff,
   0x0000, 0x0000
 };
-
-
 
 static void set_sprite_pos(UWORD *sprite_data, UWORD hstart, UWORD vstart, UWORD vstop)
 {
@@ -309,7 +316,7 @@ static void set_sprite_pos(UWORD *sprite_data, UWORD hstart, UWORD vstart, UWORD
         ((vstart >> 8) & 1) << 2 |  // vstart high bit
         ((vstop >> 8) & 1) << 1 |   // vstop high bit
         (hstart & 1) |              // hstart low bit
-        sprite_data[1] & 0x80;      // new for attached sprites: preserve attach bit
+        sprite_data[1] & 0x80;      // preserve attach bit
 }
 
 static void cleanup(void)
@@ -328,7 +335,6 @@ int main(int argc, char **argv)
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
     const char *bgfile = is_pal ? IMG_FILENAME_PAL : IMG_FILENAME_NTSC;
-    vb_waitpos = is_pal ? 303 : 262;  // line to wait for vertical blanking
 
     // LOAD IMAGE DATA
     if (!ratr0_read_tilesheet(bgfile, &image)) {
@@ -339,8 +345,10 @@ int main(int argc, char **argv)
 
     if (is_pal) {
         coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
+        vb_waitpos = 303;
     } else {
         coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_NTSC;
+        vb_waitpos = 262;
     }
     int img_row_bytes = image.header.width / 8;
     UBYTE num_colors = 1 << image.header.bmdepth;
@@ -387,7 +395,7 @@ int main(int argc, char **argv)
 
     // and set the sprite position
     UWORD nemo1_x = 320, nemo1_y = 48, nemo_height = 16;
-    UWORD nemo2_x = 320, nemo2_y = 48 + 16;
+    UWORD nemo2_x = 320;
 
     // Position for the first use of sprite 0 and 1
     set_sprite_pos(sprdata0, nemo1_x, nemo1_y, nemo1_y + nemo_height);
@@ -395,7 +403,7 @@ int main(int argc, char **argv)
 
     // Position for the second use of sprite 0 and 1
     set_sprite_pos(&sprdata0[34], nemo1_x, nemo2_y, nemo2_y + nemo_height);
-    set_sprite_pos(&sprdata1[34], nemo2_x + 16, nemo2_y, nemo2_y + nemo_height);
+    set_sprite_pos(&sprdata1[34], nemo2_x, nemo2_y, nemo2_y + nemo_height);
 
     // SET SPRITE DATA END
 
@@ -403,9 +411,11 @@ int main(int argc, char **argv)
     custom.cop1lc = (ULONG) coplist;
 
     // the event loop
-    UWORD coll_state = *custom_clxdat; // start with a defined state by clearing the register
     while (!should_exit) {
         wait_vblank();
+        // Position for the second use of sprite 0 and 1
+        set_sprite_pos(&sprdata0[34], nemo1_x, nemo2_y, nemo2_y + nemo_height);
+        set_sprite_pos(&sprdata1[34], nemo2_x + 16, nemo2_y, nemo2_y + nemo_height);
     }
 
     cleanup();

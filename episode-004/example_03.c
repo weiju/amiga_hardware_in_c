@@ -102,8 +102,6 @@ static UWORD __chip coplist[] = {
     COP_MOVE(BPL1PTH, 0), COP_MOVE(BPL1PTL, 0),
     COP_MOVE(BPL2PTH, 0), COP_MOVE(BPL2PTL, 0),
     COP_MOVE(BPL3PTH, 0), COP_MOVE(BPL3PTL, 0),
-    COP_MOVE(BPL4PTH, 0), COP_MOVE(BPL4PTL, 0),
-    COP_MOVE(BPL5PTH, 0), COP_MOVE(BPL5PTL, 0),
 
     // change background color so it's not so plain
     0x5c07, 0xfffe,
@@ -125,6 +123,7 @@ static UWORD __chip NULL_SPRITE_DATA[] = {
 
 static volatile ULONG *custom_vposr = (volatile ULONG *) 0xdff004;
 
+// Wait for this position for vertical blank
 // translated from http://eab.abime.net/showthread.php?t=51928
 static vb_waitpos;
 
@@ -326,7 +325,7 @@ static void set_sprite_pos(UWORD *sprite_data, UWORD hstart, UWORD vstart, UWORD
         ((vstart >> 8) & 1) << 2 |  // vstart high bit
         ((vstop >> 8) & 1) << 1 |   // vstop high bit
         (hstart & 1) |              // hstart low bit
-        sprite_data[1] & 0x80;      // new for attached sprites: preserve attach bit
+        sprite_data[1] & 0x80;      // preserve attach bit
 }
 
 static void cleanup(void)
@@ -345,7 +344,6 @@ int main(int argc, char **argv)
     SetTaskPri(FindTask(NULL), TASK_PRIORITY);
     BOOL is_pal = init_display();
     const char *bgfile = is_pal ? IMG_FILENAME_PAL : IMG_FILENAME_NTSC;
-    vb_waitpos = is_pal ? 303 : 262;  // line to wait for vertical blanking
     if (!ratr0_read_tilesheet(bgfile, &image)) {
         puts("Could not read background image");
         return 1;
@@ -353,8 +351,10 @@ int main(int argc, char **argv)
 
     if (is_pal) {
         coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_PAL;
+        vb_waitpos = 303;
     } else {
         coplist[COPLIST_IDX_DIWSTOP_VALUE] = DIWSTOP_VALUE_NTSC;
+        vb_waitpos = 262;
     }
     int img_row_bytes = image.header.width / 8;
     UBYTE num_colors = 1 << image.header.bmdepth;

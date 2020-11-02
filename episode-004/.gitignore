@@ -7,5 +7,5 @@ example_04
 example_05
 example_06
 example_07
-assets
+*.xcf
 script.txt
