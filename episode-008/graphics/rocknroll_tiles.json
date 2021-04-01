@@ -1,0 +1,14 @@
+{ "columns":4,
+ "image":"rocknroll_tiles.png",
+ "imageheight":112,
+ "imagewidth":64,
+ "margin":0,
+ "name":"rocknroll",
+ "spacing":0,
+ "tilecount":28,
+ "tiledversion":"1.5.0",
+ "tileheight":16,
+ "tilewidth":16,
+ "type":"tileset",
+ "version":1.5
+}
