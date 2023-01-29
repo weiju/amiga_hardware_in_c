@@ -232,17 +232,19 @@ static void blit_object(struct Ratr0TileSheet *bobs,
     int dst_x0 = dstx & 0x0f;  // destination x relative to the containing word
     int dst_shift = dst_x0 - tile_x0;  // shift amount
     int dst_blit_width = blit_width;
+    int dst_offset = 0;
 
     // negative shift => shift is to the left, so we extend the shift to the
     // left and right-shift in the previous word so we always right-shift
     if (dst_shift < 0) {
-	dst_shift = 16 + dst_shift;
-	dst_blit_width++;
+        dst_shift = 16 + dst_shift;
+        dst_blit_width++;
+        dst_offset = -2;
     }
 
     // make the blit wider if it needs more space
     if (dst_x0 > blit_width0_pixels - tile_width_pixels) {
-	dst_blit_width++;
+        dst_blit_width++;
     }
 
     UWORD alwm = 0xffff;
@@ -252,8 +254,8 @@ static void blit_object(struct Ratr0TileSheet *bobs,
     // can be larger than the source blit, so we use the larger of the 2
     // and mask out last word of the source
     if (dst_blit_width > src_blit_width) {
-	final_blit_width = dst_blit_width;
-	alwm = 0;
+        final_blit_width = dst_blit_width;
+        alwm = 0;
     }
 
     WaitBlit();
@@ -279,7 +281,7 @@ static void blit_object(struct Ratr0TileSheet *bobs,
 
     // The blit size is the size of a plane of the tile size (1 word * 16)
     UWORD bltsize = ((bobs->header.tile_height) << 6) |
-	(final_blit_width & 0x3f);
+        (final_blit_width & 0x3f);
 
     // map the tile position to physical coordinates in the tile sheet
     int srcx = tilex * bobs->header.tile_width;
@@ -291,9 +293,9 @@ static void blit_object(struct Ratr0TileSheet *bobs,
     UBYTE *src = bobs->imgdata + srcy * bobs->header.width / 8 + srcx / 8;
     // The mask data is the plane after the source image planes
     UBYTE *mask = bobs->imgdata + bobs_plane_size * bobs->header.bmdepth +
-	srcy * bobs->header.width / 8 + srcx / 8;
+        srcy * bobs->header.width / 8 + srcx / 8;
     UBYTE *dst = background->imgdata + dsty * background->header.width / 8 +
-	dstx / 8;
+        dstx / 8 + dst_offset;
 
     for (int i = 0; i < bobs->header.bmdepth; i++) {
 
